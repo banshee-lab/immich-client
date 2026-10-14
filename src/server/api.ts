@@ -11,6 +11,7 @@ const axiosClient = axios.create({
 
 export interface AuthenticationResponse {
     accessToken: string,
+    userId: string,
     name: string,
     userEmail: string,
     profileImagePath: string,
@@ -36,8 +37,16 @@ export interface People {
 
 export async function do_get(url: string, type: 'arraybuffer' | 'json' = 'json'): Promise<any> {
     const accessToken = (await auth())?.accessToken
-    const response = await axiosClient.get(url, { responseType: type, headers: {'Authorization': `Bearer ${accessToken}`, 'Accept': (type === 'arraybuffer' ? 'application/octet-stream' : 'application/json') }})
-    //console.log(response)
+    if (!accessToken) {
+        throw new Error("Immich access token is unavailable. Sign in again.")
+    }
+    const response = await axiosClient.get(url, {
+        responseType: type,
+        headers: {
+            Authorization: ["Bearer", accessToken].join(" "),
+            Accept: type === 'arraybuffer' ? 'application/octet-stream' : 'application/json',
+        },
+    })
     return response
 }
 

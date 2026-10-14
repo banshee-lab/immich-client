@@ -9,8 +9,13 @@ declare module "next-auth" {
    * Returned by `auth`, `useSession`, `getSession` and received as a prop on the `SessionProvider` React Context
    */
   interface Session {
-    user: DefaultSession["user"],
+    user: DefaultSession["user"] & { userId?: string },
+    accessToken?: string;
+  }
+
+  interface User {
     accessToken: string;
+    userId: string;
   }
 }
 
@@ -18,20 +23,26 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   ...authConfig,
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
-      if (nextUrl.pathname === "/login" && auth) {
+      const isAuthenticated = Boolean(auth?.accessToken && auth.user?.userId);
+      if (nextUrl.pathname === "/login" && isAuthenticated) {
         return Response.redirect(new URL('/album', nextUrl));
       }
-      return !!auth
+      return isAuthenticated
     },
-    /*async jwt({token, user, account}) {
-      return token;
-    },*/
-    // token.sub contains the user id, in this case, we are ussing accessToken as the id
-    async session({session, token}) {
-      if(session && token) {
-        session = Object.assign({}, session, {accessToken: token.sub});
+    async jwt({ token, user }) {
+      if (user) {
+        token.accessToken = user.accessToken;
+        token.userId = user.userId;
       }
-      console.log(`session token: ${JSON.stringify(token)}, session: ${JSON.stringify(session)}`);
+      return token;
+    },
+    async session({session, token}) {
+      if (typeof token.accessToken === "string") {
+        session.accessToken = token.accessToken;
+      }
+      if (typeof token.userId === "string") {
+        session.user = { ...session.user, userId: token.userId };
+      }
       return session;
     }
   },
@@ -46,7 +57,14 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           const { email, password } = parsedCredentials.data
           const user = await authenticate(email, password)
           if (!user) return null
-          return { name: user.name, id: user.accessToken, email: user.userEmail, image: user.profileImagePath }
+          return {
+            name: user.name,
+            id: user.userId,
+            userId: user.userId,
+            accessToken: user.accessToken,
+            email: user.userEmail,
+            image: user.profileImagePath,
+          }
         }
         return null
       },
